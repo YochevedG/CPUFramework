@@ -46,6 +46,7 @@ namespace CPUFramework
             return n;
         }
 
+
         private static void SetColumnsAllowNull(DataTable dt)
         {
             foreach(DataColumn c in dt.Columns)
