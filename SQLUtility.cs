@@ -23,6 +23,7 @@ namespace CPUFramework
             return cmd;
         }
 
+
         public static DataTable GetDataTable(SqlCommand cmd)
         {
             Debug.Print(cmd.CommandText);
@@ -32,8 +33,16 @@ namespace CPUFramework
                 conn.Open();
                 cmd.Connection = conn;
                 Debug.Print(GetSQL(cmd));
+                try 
+                { 
                 SqlDataReader dr = cmd.ExecuteReader();
                 dt.Load(dr);
+                }
+                catch(SqlException ex)
+                {
+                    string msg = ParseConstraintMessage(ex.Message);
+                    throw new Exception(msg);
+                }
             }
             SetColumnsAllowNull(dt);
             return dt;
@@ -47,6 +56,27 @@ namespace CPUFramework
         public static void ExecuteSQL(string sqlstatement)
         {
             GetDataTable(sqlstatement);
+        }
+
+        private static string ParseConstraintMessage(string msg)
+        {
+            string origmsg = msg;
+            if (msg.Contains("ck_"))
+            {
+                int pos = msg.IndexOf("ck_") + 3;
+                msg = msg.Substring(pos);
+                pos = msg.IndexOf("\"");
+                if (pos == -1)
+                {
+                    msg = origmsg;
+                }
+                else
+                {
+                    msg = msg.Substring(0, pos);
+                    msg = msg.Replace("_", " ");
+                }
+            }
+            return msg;
         }
 
         public static int GetFirstRowValue(string sql)
