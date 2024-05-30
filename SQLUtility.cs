@@ -61,11 +61,26 @@ namespace CPUFramework
         private static string ParseConstraintMessage(string msg)
         {
             string origmsg = msg;
-            if (msg.Contains("ck_"))
+            string prefix = "ck_";
+            string msgend = "";
+            if(msg.Contains(prefix) == false)
             {
-                int pos = msg.IndexOf("ck_") + 3;
+                if (msg.Contains("u_"))
+                {
+                    prefix = "u_";
+                    msgend = " must be unique";
+                }
+                else if (msg.Contains("f_"))
+                {
+                    prefix = "f_";
+                }
+            }
+            if (msg.Contains(prefix))
+            {
+                msg = msg.Replace("\"", "'");
+                int pos = msg.IndexOf(prefix) + prefix.Length;
                 msg = msg.Substring(pos);
-                pos = msg.IndexOf("\"");
+                pos = msg.IndexOf("'");
                 if (pos == -1)
                 {
                     msg = origmsg;
@@ -74,6 +89,7 @@ namespace CPUFramework
                 {
                     msg = msg.Substring(0, pos);
                     msg = msg.Replace("_", " ");
+                    msg = msg + msgend;
                 }
             }
             return msg;
