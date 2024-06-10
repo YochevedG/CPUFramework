@@ -1,6 +1,7 @@
 ﻿using System.Data;
 using System.Data.SqlClient;
 using System.Diagnostics;
+using System.Security.Cryptography.X509Certificates;
 using System.Text;
 
 namespace CPUFramework
@@ -8,7 +9,7 @@ namespace CPUFramework
     public class SQLUtility
     {
         public static string ConnectionString = "";
-      
+
         public static SqlCommand GetSQLCommand(string sprocname)
         {
             SqlCommand cmd;
@@ -23,8 +24,12 @@ namespace CPUFramework
             return cmd;
         }
 
-
         public static DataTable GetDataTable(SqlCommand cmd)
+        {
+            return DoExecuteSQL(cmd, true);
+        }
+
+        private static DataTable DoExecuteSQL(SqlCommand cmd, bool loadtable)
         {
             Debug.Print(cmd.CommandText);
             DataTable dt = new();
@@ -33,24 +38,72 @@ namespace CPUFramework
                 conn.Open();
                 cmd.Connection = conn;
                 Debug.Print(GetSQL(cmd));
-                try 
-                { 
-                SqlDataReader dr = cmd.ExecuteReader();
-                dt.Load(dr);
+                try
+                {
+                    SqlDataReader dr = cmd.ExecuteReader();
+                    CheckReturnValue(cmd);
+                    if (loadtable == true)
+                    {
+                        dt.Load(dr);
+                    }
                 }
-                catch(SqlException ex)
+                catch (SqlException ex)
                 {
                     string msg = ParseConstraintMessage(ex.Message);
                     throw new Exception(msg);
+                }
+                catch (InvalidCastException ex)
+                {
+                    throw new Exception(cmd.CommandText + ": " + ex.Message, ex);
                 }
             }
             SetColumnsAllowNull(dt);
             return dt;
         }
 
+        private static void CheckReturnValue(SqlCommand cmd)
+        {
+            int returnvalue = 0;
+            string msg = "";
+            if (cmd.CommandType == CommandType.StoredProcedure)
+            {
+                foreach (SqlParameter p in cmd.Parameters)
+                {
+                    if (p.Direction == ParameterDirection.ReturnValue)
+                    {
+                        if (p.Value != null)
+                        {
+                            returnvalue = (int)p.Value;
+                        }
+                    }
+                    else if (p.ParameterName.ToLower() == "@message")
+                    {
+                        if (p.Value != null)
+                        {
+                            msg = p.Value.ToString();
+                        }
+                    }
+                }
+
+                if (returnvalue == 1)
+                {
+                    if (msg == "")
+                    {
+                        msg = $"{cmd.CommandText} did not do action that was requested.";
+                    }
+                    throw new Exception(msg);
+                }
+            }
+        }
+
         public static DataTable GetDataTable(string sqlstatement)
         {
-           return GetDataTable(new SqlCommand(sqlstatement));
+            return DoExecuteSQL(new SqlCommand(sqlstatement), true);
+        }
+
+        public static void ExecuteSQL(SqlCommand cmd)
+        {
+            DoExecuteSQL(cmd, false);
         }
 
         public static void ExecuteSQL(string sqlstatement)
@@ -58,12 +111,25 @@ namespace CPUFramework
             GetDataTable(sqlstatement);
         }
 
+        public static void SetParamValue(SqlCommand cmd, string paramname, object value)
+        {
+            try
+            {
+                cmd.Parameters[paramname].Value = value;
+            }
+
+            catch (Exception ex)
+            {
+                throw new Exception(cmd.CommandText + ": " + ex.Message);
+            }
+        }
+
         private static string ParseConstraintMessage(string msg)
         {
             string origmsg = msg;
             string prefix = "ck_";
             string msgend = "";
-            if(msg.Contains(prefix) == false)
+            if (msg.Contains(prefix) == false)
             {
                 if (msg.Contains("u_"))
                 {
@@ -90,6 +156,15 @@ namespace CPUFramework
                     msg = msg.Substring(0, pos);
                     msg = msg.Replace("_", " ");
                     msg = msg + msgend;
+
+                    if (prefix == "f_")
+                    {
+                        var words = msg.Split(" ");
+                        if (words.Length > 1)
+                        {
+                            msg = $"Cannot delete {words[0]} because it has a related {words[1]} record.";
+                        }
+                    }
                 }
             }
             return msg;
@@ -101,11 +176,11 @@ namespace CPUFramework
             DataTable dt = GetDataTable(sql);
             if (dt.Rows.Count > 0 && dt.Columns.Count > 0)
             {
-                if (dt.Rows[0][0] != DBNull.Value) 
+                if (dt.Rows[0][0] != DBNull.Value)
                 {
                     int.TryParse(dt.Rows[0][0].ToString(), out n);
                 }
-                
+
             }
 
             return n;
@@ -114,7 +189,7 @@ namespace CPUFramework
 
         private static void SetColumnsAllowNull(DataTable dt)
         {
-            foreach(DataColumn c in dt.Columns)
+            foreach (DataColumn c in dt.Columns)
             {
                 c.AllowDBNull = true;
             }
@@ -126,7 +201,7 @@ namespace CPUFramework
 #if DEBUG 
             StringBuilder sb = new StringBuilder();
 
-            if(cmd.Connection != null)
+            if (cmd.Connection != null)
             {
                 sb.AppendLine($"--{cmd.Connection.DataSource}");
                 sb.AppendLine($"use {cmd.Connection.Database}");
@@ -139,7 +214,7 @@ namespace CPUFramework
                 int paramcount = cmd.Parameters.Count - 1;
                 int paramnum = 0;
                 string comma = ",";
-                foreach(SqlParameter p in cmd.Parameters)
+                foreach (SqlParameter p in cmd.Parameters)
                 {
                     if (p.Direction != ParameterDirection.ReturnValue)
                     {
@@ -163,9 +238,9 @@ namespace CPUFramework
 
         public static void DebugPrintDataTable(DataTable dt)
         {
-            foreach(DataRow r in dt.Rows)
+            foreach (DataRow r in dt.Rows)
             {
-                foreach(DataColumn c in dt.Columns)
+                foreach (DataColumn c in dt.Columns)
                 {
                     Debug.Print(c.ColumnName + " = " + r[c.ColumnName].ToString());
                 }
