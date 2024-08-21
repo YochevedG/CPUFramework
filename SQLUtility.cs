@@ -6,9 +6,31 @@ using System.Text;
 
 namespace CPUFramework
 {
+   
     public class SQLUtility
     {
-        public static string ConnectionString = "";
+        private static string ConnectionString = "";
+
+        public static void SetConnectionString(string connstring, bool tryopen, string userid = "", string password = "")
+        {
+            ConnectionString = connstring;
+            if (userid != "")
+            {
+                SqlConnectionStringBuilder b = new();
+                b.ConnectionString = ConnectionString;
+                b.UserID = userid;
+                b.Password = password;
+                ConnectionString = b.ConnectionString;
+            }
+            if (tryopen)
+            {
+                using (SqlConnection conn = new SqlConnection(ConnectionString))
+                {
+                    conn.Open();
+                }
+            }
+
+        }
 
         public static SqlCommand GetSQLCommand(string sprocname)
         {
@@ -226,7 +248,6 @@ namespace CPUFramework
                 {
                     int.TryParse(dt.Rows[0][0].ToString(), out n);
                 }
-
             }
 
             return n;
